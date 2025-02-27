@@ -1,0 +1,54 @@
+#this is an example docker config for an a setup that uses two SDRs - one ACARS, one VDLM2, to feed an acars router instance which then feeds ACARS Drama (so, three containers total). You can use this as the basis of your own configuration.
+
+version: "3.8"
+
+services:
+  acarsdec:
+    image: ghcr.io/sdr-enthusiasts/docker-acarsdec:latest
+    tty: true
+    container_name: acarsdec
+    restart: always
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      - FEED_ID=ACARS-FEED-NAME # put a unique name here so it is easier to identify the feed
+      - TZ=Etc/UTC
+      - SERIAL=00000005 # must be the serial of your SDR - found using rtl_eeprom or similar
+      - FREQUENCIES=130.025 # you may need to adjust these
+      - SERVER=acars_router
+      - SERVER_PORT=5550
+    tmpfs:
+      - /run:exec,size=64M
+      - /var/log
+
+  dumpvdl2:
+    image: ghcr.io/sdr-enthusiasts/docker-dumpvdl2:latest
+    tty: true
+    container_name: dumpvdl2
+    restart: always
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    environment:
+      - FEED_ID=FEED-VDLM2 # put a unique name here so it is easier to identify the feed
+      - TZ=Etc/UTC
+      - SERIAL=00000003 # must be the serial of your SDR - found using rtl_eeprom or similar
+      - FREQUENCIES=136.975 # you may need to adjust these
+      - ZMQ_MODE=server
+      - ZMQ_ENDPOINT=tcp://0.0.0.0:45555
+    tmpfs:
+      - /run:exec,size=64M
+      - /var/log
+      
+  acars_router:
+    image: ghcr.io/sdr-enthusiasts/acars_router:latest
+    tty: true
+    container_name: acars_router
+    restart: always
+    environment:
+      - TZ=Etc/UTC
+      - AR_SEND_UDP_ACARS=feedthe.acarsdrama.com:5550
+      - AR_SEND_UDP_VDLM2=feedthe.acarsdrama.com:5555
+      - AR_RECV_ZMQ_VDLM2=dumpvdl2:45555
+    tmpfs:
+      - /run:exec,size=64M
+      - /var/log
